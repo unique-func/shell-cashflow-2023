@@ -11,7 +11,7 @@ def datetime_features(df_temp):
     df_temp['dayofyear'] = df_temp['Date'].dt.dayofyear
     df_temp['quarter'] = df_temp['Date'].dt.quarter
     df_temp['dayofmonth'] = df_temp['Date'].dt.day
-    df_temp['weekofyear'] = df_temp['Date'].dt.weekofyear
+    df_temp['weekofyear'] = df_temp['Date'].dt.isocalendar().week
     df_temp['month_middle'] = np.where((df_temp['Date'].dt.day == 15), 1, 0)
     df_temp['month_end'] = np.where(df_temp['Date'].dt.is_month_end, 1, 0)
     df_temp['month_start'] = np.where(df_temp['Date'].dt.is_month_start, 1, 0)
@@ -44,4 +44,39 @@ def lag_features(df_temp,
     for col in columns:
         for lag in lags:
             df_temp[f'lag_{lag}_{col}'] = df_temp[col].shift(lag)
+    return df_temp
+
+def date_like_features_func(df_temp):
+    date_like_features = []
+
+    for i in [1,2,3]:
+         for col in [
+             'month_end',
+             'month_start',
+             'month_middle',
+             'weekfirstdate',
+             'weeklastdate',
+         ]:
+                df_temp[f"is_{col}_in_next_{i}_days"] = df_temp[col].rolling(i).sum().shift(-i).fillna(-1)
+                df_temp[f"is_{col}_in_past_{i}_days"] = df_temp[col].rolling(i).sum().shift(1).fillna(-1)
+                date_like_features.extend([f"is_{col}_in_next_{i}_days" , f"is_{col}_in_past_{i}_days"])
+    return df_temp, date_like_features
+                
+def usd_normalizer(df_temp):
+    df_temp["usd_diff"] = df_temp["USD SATIŞ"] - df_temp["USD ALIŞ"]
+    df_temp["eur_diff"] = df_temp["EUR SATIŞ"] - df_temp["EUR ALIŞ"]
+    df_temp["gbp_diff"] = df_temp["GBP SATIŞ"] - df_temp["GBP ALIŞ"]
+    
+    df_temp["ab_mult_usd"] = df_temp["AB Piyasa Fiyatı"] * df_temp["Dolar Kuru (Satış)"]
+    df_temp["ab_gap"] = df_temp["AB Piyasa Fiyatı- Yüksek"] - df_temp["AB Piyasa Fiyatı- Düşük"]
+    df_temp["ab_gap_mult_usd"] = df_temp["ab_gap"] - df_temp["Dolar Kuru (Satış)"]
+    
+    for col in ['Customers - DDS', 'Customers - EFT', 'T&S Collections',
+            'FX Sales', 'Other operations', 'Tüpraş', 'Other Oil',
+            'Gas', 'Import payments (FX purchases)', 'Tax',
+            'Operatioınal and Admin. Expenses', 'VIS Buyback Payments',
+            'Total Inflows', 'Total Outflows']:
+    
+        df_temp[col] /= df_temp["USD ALIŞ"]
+        
     return df_temp
