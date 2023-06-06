@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import timedelta
 from catboost import CatBoostRegressor
+from pandas.tseries.offsets import BDay
 from src.utils import datetime_features, date_like_features_func, usd_normalizer, lag_features
 #from src.constants import CFG
 class CFG:
@@ -18,7 +19,7 @@ usd = pd.DataFrame()
 
 st.set_page_config(page_title="Shell Datathon 2023")
 st.markdown("<h1 style='text-align:center;'>Shell Datathon 2023 Cashflow Inference Tool</h1>", unsafe_allow_html=True)
-uploaded_csv_files = st.file_uploader("Son 7 günde gerçekleşen inflow-outflow, USD ve Brent verilerini içeren '.csv' formatları dosyalarını yükleyiniz.", accept_multiple_files=True)
+uploaded_csv_files = st.file_uploader("Son 70 günde gerçekleşen inflow-outflow, USD ve Brent verilerini içeren '.csv' formatlı dosyaları yükleyiniz.", accept_multiple_files=True)
 
 if uploaded_csv_files is not None:
     dfs = []
@@ -55,8 +56,8 @@ if uploaded_csv_files is not None:
         
         print(f"Yüklenen data başlangıç tarihi: {cash_flow['Date'].iloc[0]}")
         
-        forecast_start_date = (cash_flow['Date'].iloc[-1] + timedelta(days=1)).strftime('%Y-%m-%d')
-        forecast_end_date = (cash_flow['Date'].iloc[-1] + timedelta(days=CFG.forecast_period+1)).strftime('%Y-%m-%d')
+        forecast_start_date = (cash_flow['Date'].iloc[-1] + BDay(1)).strftime('%Y-%m-%d')
+        forecast_end_date = (cash_flow['Date'].iloc[-1] + BDay(CFG.forecast_period+2)).strftime('%Y-%m-%d')
         print(f'Forecast Start Date: {forecast_start_date},Forecast End Date:{forecast_end_date}')
 
         base_date = pd.DataFrame(pd.date_range(start=cash_flow['Date'].iloc[0], end=forecast_end_date, freq="D"),columns=['Date'])
