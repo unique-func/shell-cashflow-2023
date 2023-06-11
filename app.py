@@ -78,5 +78,13 @@ if uploaded_csv_files is not None:
                                         mode='lines',
                               name='Prediction'))
             st.plotly_chart(fig, use_container_width=True)
+            inference_df_output = pd.DataFrame(df.Date.tail(len(target_forecast)))
+            inference_df_output['Net Cashflow from Operations'] = target_forecast
+            #TODO: Inflow-Outflow ayrı, feature importance grafikleri eklenecek
             
-            #TODO: Inflow-Outflow ayrı, feature importance grafikleri eklenecek 
+            output_csv = inference_df_output.to_csv(index=False).encode('utf-8')
+
+            st.download_button(label="Download forecasted data as CSV",
+                               data=output_csv,
+                               file_name='forecast.csv',
+                               mime='text/csv',)
