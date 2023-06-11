@@ -1,5 +1,8 @@
 import pandas as pd
 import numpy as np
+from zipfile import ZipFile
+from catboost import CatBoostRegressor
+
 
 def datetime_features(df_temp):
     """
@@ -27,8 +30,7 @@ def datetime_features(df_temp):
     df_temp.loc[df_temp.dayofweek==0,'weekfirstdate'] = 1
     df_temp.loc[df_temp.dayofweek==4,'weeklastdate'] = 1
     
-    df_temp[['weekfirstdate','weeklastdate']] =\
-        df_temp[['weekfirstdate','weeklastdate']].fillna(0).astype(int)
+    df_temp[['weekfirstdate','weeklastdate']] = df_temp[['weekfirstdate','weeklastdate']].fillna(0).astype(int)
     
     date_features = ['month','dayofweek','quarter','dayofmonth', 'dayofyear', 'weekofyear',
                      'month_middle','month_end', 'month_start', 'weekfirstdate','weeklastdate',
@@ -47,8 +49,8 @@ def lag_features(df_temp,
     return df_temp
 
 def date_like_features_func(df_temp):
+    
     date_like_features = []
-
     for i in [1,2,3]:
          for col in [
              'month_end',
@@ -80,3 +82,31 @@ def usd_normalizer(df_temp):
         df_temp[col] /= df_temp["USD ALIŞ"]
         
     return df_temp
+
+# opening the zip file in READ mode
+def read_models(zip_path):
+    """
+    Read models from zip
+    """
+    with ZipFile(zip_path, 'r') as zip:
+        all_model_names = zip.namelist()
+        inflow_model_names = [model for model in all_model_names if 'inflow' in model]
+        outflow_model_names = [model for model in all_model_names if 'outflow' in model]
+        
+        inflow_models = [zip.read(model_name) for model_name in inflow_model_names]
+        outflow_models = [zip.read(model_name) for model_name in outflow_model_names]
+        
+    return inflow_models, outflow_models
+
+
+def predict_fn(models, inference_df):
+    """
+    load from blob and predict future values using catboost models
+    """
+    preds = []
+    for model in models:
+        cat = CatBoostRegressor()
+        cat.load_model(blob=model)
+        pred = (cat.predict(inference_df) * inference_df['ref_col']).values
+        preds.append(pred)
+    return np.mean(preds, axis=0)

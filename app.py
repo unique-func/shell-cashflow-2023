@@ -3,7 +3,8 @@ import pandas as pd
 from datetime import timedelta
 from catboost import CatBoostRegressor
 from pandas.tseries.offsets import BDay
-from src.utils import datetime_features, date_like_features_func, usd_normalizer, lag_features
+from src.utils import datetime_features, date_like_features_func, usd_normalizer, lag_features, read_models, predict_fn
+import plotly.graph_objects as go
 #from src.constants import CFG
 class CFG:
     target = 'Net Cashflow from Operations'
@@ -12,6 +13,8 @@ class CFG:
     usd_columns = ['Yıl','Tarih','USD ALIŞ','USD SATIŞ','EUR ALIŞ','EUR SATIŞ','GBP ALIŞ','GBP SATIŞ']
     brent_columns = ['Tarih','Ürün','Avrupa Birliği Para Birimi','AB Piyasa Fiyatı','AB Piyasa Fiyatı- Yüksek','AB Piyasa Fiyatı- Düşük','Dolar Kuru (Satış)']
     forecast_period = 70
+    scaler_col = 'ref_col'
+    lags = [forecast_period]
     
 cash_flow = pd.DataFrame()
 brent = pd.DataFrame()
@@ -33,25 +36,28 @@ if uploaded_csv_files is not None:
         if CFG.target in df_temp.columns:
             cash_flow = df_temp.copy()
             cash_flow = cash_flow[CFG.cash_flow_columns]
-            print(f"cash_flow datası başarıyla yüklendi,cash_flow shape: {cash_flow.shape}")
+            print(f"cash_flow datası başarıyla yüklendi, shape: {cash_flow.shape}")
         elif CFG.usd_columns[0] in df_temp.columns.tolist():
             usd = df_temp.copy()
             usd = usd[CFG.usd_columns]
-            print(f"usd datası başarıyla yüklendi,cash_flow shape: {usd.shape}")
+            print(f"usd datası başarıyla yüklendi, shape: {usd.shape}")
         elif CFG.brent_columns[0] in df_temp.columns.tolist():
             brent = df_temp.copy()
             brent = brent[CFG.brent_columns]
-            print(f"brent datası başarıyla yüklendi,cash_flow shape: {brent.shape}")
+            print(f"brent datası başarıyla yüklendi, shape: {brent.shape}")
         else:
-            raise "Yüklenen csv'de yer alan sütun isimlerini kontrol ediniz." 
+            st.error("Hatalı giriş yapıldı, lütfen yüklenen csv uzantılı dosyalardaki sütun isimlerini kontrol ediniz.")
     
     if not (cash_flow.empty and usd.empty and brent.empty):
+        st.success('Veriler başarılı bir şekilde yüklendi!', icon="✅")
         brent = brent.rename(columns={'Tarih':'Date'})
         usd = usd.rename(columns={'Tarih':'Date'})
 
         cash_flow['Date'] = pd.to_datetime(cash_flow['Date'])
         brent['Date'] = pd.to_datetime(brent['Date'])
         usd['Date'] = pd.to_datetime(usd['Date'])
+        brent = brent.drop(['Ürün', 'Avrupa Birliği Para Birimi'],axis=1)
+        usd = usd.drop(['Yıl'], axis=1)
         cash_flow = cash_flow.sort_values('Date').reset_index(drop=True)
         
         print(f"Yüklenen data başlangıç tarihi: {cash_flow['Date'].iloc[0]}")
@@ -65,25 +71,40 @@ if uploaded_csv_files is not None:
         print(date_features)
         
         base_date, date_like_features = date_like_features_func(base_date)
-        
         base_date = base_date[base_date.dayofweek<=4].reset_index(drop=True)
+        
+        
         df = base_date.merge(cash_flow, how='left', on='Date')
         df = df.merge(brent, how='left', on='Date')
         df = df.merge(usd, how='left', on='Date')
-        
         df = usd_normalizer(df)
-        shift_cols = df.drop(['Date'] + date_features + date_like_features, axis=1).columns.to_list()
-        lags = [CFG.forecast_period]
         
+        shift_cols = df.drop(['Date'] + date_features + date_like_features, axis=1).columns.to_list()
+
+        lags = [CFG.forecast_period]
         df = lag_features(df_temp=df,
-                  columns=shift_cols,
-                  lags=lags
+                          columns=shift_cols,
+                          lags=CFG.lags
                  )
-        #shift_cols.remove(CFG.target)
-        #for t in CFG.targets:
-        #    shift_cols.remove(t)
-        df = df.drop(shift_cols,axis=1)
+        exclude_cols = ['Date', CFG.target] + CFG.targets
+        inference_df = df.drop(shift_cols + exclude_cols,axis=1)
         # NaN handling for lag features
-        inference_df = df.iloc[max(lags):,:].reset_index(drop=True)
-        print(inference_df.tail(1))
-        st.dataframe(inference_df)
+        inference_df = inference_df.iloc[max(lags):,:].tail(CFG.forecast_period+2).reset_index(drop=True)
+        
+        inference_df[CFG.scaler_col] = inference_df[f"lag_{CFG.forecast_period}_USD ALIŞ"]
+        inference_df[CFG.scaler_col] = inference_df[CFG.scaler_col].ffill()
+        
+        #Inference
+        inflow_models,outflow_models = read_models(zip_path='./model/models.zip')
+        print("Modeller başarıyla yüklendi.")
+        print("Inference shape: ", inference_df.shape)
+        inflow_forecast, outflow_forecast = predict_fn(inflow_models,inference_df), predict_fn(outflow_models,inference_df)
+        target_forecast = inflow_forecast + outflow_forecast
+        
+        #st.dataframe(inference_df)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df.Date.tail(len(target_forecast)),
+                                    y=target_forecast,
+                                    mode='lines',
+                          name='Prediction'))
+        st.plotly_chart(fig, use_container_width=True)
