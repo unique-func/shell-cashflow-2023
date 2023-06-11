@@ -1,7 +1,24 @@
 import pandas as pd
 import numpy as np
+from pandas.tseries.offsets import BDay
 from zipfile import ZipFile
 from catboost import CatBoostRegressor
+from src.constants import CFG
+
+
+def preprocess_fn(brent_tmp, usd_tmp, cash_flow_tmp):
+    brent_tmp = brent_tmp.rename(columns={'Tarih':'Date'})
+    usd_tmp = usd_tmp.rename(columns={'Tarih':'Date'})
+    
+    cash_flow_tmp['Date'] = pd.to_datetime(cash_flow_tmp['Date'])
+    brent_tmp['Date'] = pd.to_datetime(brent_tmp['Date'])
+    usd_tmp['Date'] = pd.to_datetime(usd_tmp['Date'])
+    brent_tmp = brent_tmp.drop(['Ürün', 'Avrupa Birliği Para Birimi'],axis=1)
+    usd_tmp = usd_tmp.drop(['Yıl'], axis=1)
+    
+    cash_flow_tmp = cash_flow_tmp.sort_values('Date').reset_index(drop=True)
+    
+    return brent_tmp, usd_tmp, cash_flow_tmp
 
 
 def datetime_features(df_temp):
@@ -64,6 +81,19 @@ def date_like_features_func(df_temp):
                 date_like_features.extend([f"is_{col}_in_next_{i}_days" , f"is_{col}_in_past_{i}_days"])
     return df_temp, date_like_features
                 
+def prepare_base_date(cash_flow_tmp):
+    print(f"Yüklenen data başlangıç tarihi: {cash_flow_tmp['Date'].iloc[0]}")
+     #Yüklenen cash_flow datasındaki son tarihten bir sonraki iş günü forecast_start_date
+    forecast_start_date = (cash_flow_tmp['Date'].iloc[-1] + BDay(1)).strftime('%Y-%m-%d')
+    forecast_end_date = (cash_flow_tmp['Date'].iloc[-1] + BDay(CFG.forecast_period+2)).strftime('%Y-%m-%d')
+    print(f'Forecast Start Date: {forecast_start_date},Forecast End Date:{forecast_end_date}')
+    base_date = pd.DataFrame(pd.date_range(start=cash_flow_tmp['Date'].iloc[0], end=forecast_end_date, freq="D"),columns=['Date'])
+    base_date, date_features = datetime_features(base_date)
+    base_date, date_like_features = date_like_features_func(base_date)
+    base_date = base_date[base_date.dayofweek<=4].reset_index(drop=True)
+    
+    return base_date, date_features, date_like_features
+
 def usd_normalizer(df_temp):
     df_temp["usd_diff"] = df_temp["USD SATIŞ"] - df_temp["USD ALIŞ"]
     df_temp["eur_diff"] = df_temp["EUR SATIŞ"] - df_temp["EUR ALIŞ"]
