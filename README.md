@@ -22,3 +22,5 @@ Aşağıdaki kod ile tanımlayacağınız veri ile bütün süreci koşup çıkt
 ```bash
 streamlit run app.py
 ```
+
+Ayrıca halihazırda deploy edilmiş örnek uygulamaya [buradan](https://huggingface.co/spaces/unique-func/shell-cashflow-datathon-2023) ulaşılabilirsiniz.
