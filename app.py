@@ -3,10 +3,11 @@ import pandas as pd
 from datetime import timedelta
 from catboost import CatBoostRegressor
 
-from src.utils import preprocess_fn, prepare_base_date, datetime_features, date_like_features_func, usd_normalizer, lag_features, read_models, predict_fn
+from src.utils import preprocess_fn, prepare_base_date, datetime_features, date_like_features_func, usd_normalizer, lag_features, read_models, predict_fn, download_button
 import plotly.graph_objects as go
 from src.constants import CFG
 from PIL import Image
+import base64
 
 cash_flow = pd.DataFrame()
 brent = pd.DataFrame()
@@ -15,7 +16,7 @@ usd = pd.DataFrame()
 st.set_page_config(page_title="Shell Datathon 2023")
 
 # Logo
-col1, col2, col3 = st.columns(3)
+col1, col2, col3 = st.columns([4, 1, 4])
 with col1:
     st.write(' ')
 with col2:
@@ -25,8 +26,11 @@ with col3:
     st.write(' ')
 
 # Title
-st.markdown("<h1 style='text-align:center;'>Shell Datathon 2023 Cashflow Inference Tool</h1>", unsafe_allow_html=True)
-uploaded_csv_files = st.file_uploader("Son 70 günde gerçekleşen inflow-outflow, USD ve Brent verilerini içeren **.csv** formatlı dosyaları yükleyiniz.", accept_multiple_files=True)
+st.markdown("<h2 style='text-align:center;'>Shell Datathon 2023 Cashflow Inference Tool</h2>", unsafe_allow_html=True)
+uploader_holder = st.empty()
+uploaded_csv_files = uploader_holder.file_uploader("Son 70 günde gerçekleşen inflow-outflow, USD ve Brent verilerini içeren **.csv** formatlı dosyaları yükleyiniz.",
+                                                   accept_multiple_files=True)
+
 
 # File Upload
 if uploaded_csv_files is not None:
@@ -56,8 +60,11 @@ if uploaded_csv_files is not None:
             st.error("Hatalı giriş yapıldı, lütfen yüklenen csv uzantılı dosyalardaki sütun isimlerini kontrol ediniz.")
 
     # Successful Upload Routine
-    if not (cash_flow.empty and usd.empty and brent.empty):
-        st.success('Veriler başarılı bir şekilde yüklendi!', icon="✅")
+    if not (cash_flow.empty or usd.empty or brent.empty):
+        uploader_holder.empty()
+
+        load_success_holder = st.empty()
+        load_success_holder.success('Veriler başarılı bir şekilde yüklendi!', icon="✅")
             
         brent, usd, cash_flow = preprocess_fn(brent, usd, cash_flow)
         base_date, date_features, date_like_features = prepare_base_date(cash_flow)
@@ -84,32 +91,54 @@ if uploaded_csv_files is not None:
         inference_df[CFG.scaler_col] = inference_df[CFG.scaler_col].ffill()
 
         # Inference
-        if st.button('Tahmin Et'):
-            inflow_models,outflow_models = read_models(zip_path='./model/models.zip')
-            print("Modeller başarıyla yüklendi.")
-            print("Inference shape: ", inference_df.shape)
-            inflow_forecast, outflow_forecast = predict_fn(inflow_models,inference_df), predict_fn(outflow_models,inference_df)
-            target_forecast = inflow_forecast + outflow_forecast
+        predict_holder = st.empty()
+        if predict_holder.button('Tahmin Et'):
+            with st.spinner(text="Tahmin ediliyor..."):
+                load_success_holder.empty()
+                inflow_models, outflow_models = read_models(zip_path='./model/models.zip')
+                print("Modeller başarıyla yüklendi.")
+                print("Inference shape: ", inference_df.shape)
+                inflow_forecast, outflow_forecast = predict_fn(inflow_models, inference_df),\
+                    predict_fn(outflow_models, inference_df)
+                target_forecast = inflow_forecast + outflow_forecast
+                predict_holder.empty()
 
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df.Date.tail(len(inflow_forecast)),
-                                     y=inflow_forecast,
-                                     mode='lines',
-                                     name='Inflow Prediction'))
-            fig.add_trace(go.Scatter(x=df.Date.tail(len(outflow_forecast)),
-                                     y=outflow_forecast,
-                                     mode='lines',
-                                     name='Outflow Prediction'))
-            fig.add_trace(go.Scatter(x=df.Date.tail(len(target_forecast)),
-                                     y=target_forecast,
-                                     mode='lines',
-                                     name='Net Cashflow Prediction'))
-            st.plotly_chart(fig, use_container_width=True)
+                inference_df_output = pd.DataFrame(df.Date.tail(len(target_forecast)))
+                inference_df_output['Predicted Total Inflow'] = inflow_forecast
+                inference_df_output['Predicted Total Outflow'] = outflow_forecast
+                inference_df_output['Net Cashflow from Operations'] = target_forecast
+                # output_csv = inference_df_output.to_csv(index=False).encode('utf-8')
 
-            inference_df_output = pd.DataFrame(df.Date.tail(len(target_forecast)))
-            inference_df_output['Net Cashflow from Operations'] = target_forecast
-            output_csv = inference_df_output.to_csv(index=False).encode('utf-8')
-            st.download_button(label="Tahmini İndir",
-                               data=output_csv,
-                               file_name='forecast.csv',
-                               mime='text/csv',)
+                download_button_str = download_button(object_to_download=inference_df_output,
+                                download_filename='forecast.csv',
+                                button_text="Tahmini İndir")
+
+                st.markdown(download_button_str, unsafe_allow_html=True)
+
+                tab1, tab2, tab3 = st.tabs(["Inflow Tahmini", "Outflow Tahmini", "Net Cashflow Tahmini"])
+
+                with tab1:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=df.Date.tail(len(inflow_forecast)),
+                                             y=inflow_forecast,
+                                             mode='lines',
+                                             name='Inflow Tahmini',
+                                             line=dict(color="red")))
+                    st.plotly_chart(fig, use_container_width=True)
+                with tab2:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=df.Date.tail(len(outflow_forecast)),
+                                             y=outflow_forecast,
+                                             mode='lines',
+                                             name='Outflow Tahmini',
+                                             line=dict(color="red")))
+                    st.plotly_chart(fig, use_container_width=True)
+                with tab3:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=df.Date.tail(len(target_forecast)),
+                                             y=target_forecast,
+                                             mode='lines',
+                                             name='Net Cashflow Tahmini',
+                                             line=dict(color="red")))
+                    st.plotly_chart(fig, use_container_width=True)
+
