@@ -1,3 +1,10 @@
+<img src="./src/images/shell.png" align="center" height="150" width="160" />
+
+# Shell Cashflow Datathon 2023
+### Takım: Unique
+
+Bu repository, `Unique` takımının `Shell Cashflow Datathon 2023` yarışması için hazırladığı konsept uygulamanın kaynak kodlarını içermektedir.
+
 ## Kullanım
 
 ### Gereksinimler
