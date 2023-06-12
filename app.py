@@ -28,7 +28,7 @@ with col3:
 # Title
 st.markdown("<h2 style='text-align:center;'>Shell Datathon 2023 Cashflow Inference Tool</h2>", unsafe_allow_html=True)
 uploader_holder = st.empty()
-uploaded_csv_files = uploader_holder.file_uploader("Son 70 günde gerçekleşen inflow-outflow, USD ve Brent verilerini içeren **.csv** formatlı dosyaları yükleyiniz.",
+uploaded_csv_files = uploader_holder.file_uploader("Son 70 iş gününde gerçekleşen inflow-outflow, USD ve Brent verilerini içeren **.csv** formatlı dosyaları yükleyiniz.",
                                                    accept_multiple_files=True)
 
 
