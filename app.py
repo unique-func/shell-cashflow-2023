@@ -26,9 +26,11 @@ with col3:
     st.write(' ')
 
 # Title
-st.markdown("<h2 style='text-align:center;'>Shell Datathon 2023 Cashflow Inference Tool</h2>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align:center;'>Shell Cashflow Datathon 2023 Inference Tool</h2>", unsafe_allow_html=True)
+url = "https://www.kaggle.com/competitions/new-shell-cashflow-datathon-2023/data"
+st.write("Yüklenmesi gereken veri formatı yarışmada sağlanan format ([Shell Datathon](%s)) ile aynıdır. Son 70 iş gününde gerçekleşen veriler aynı formatta yüklenmelidir." % url)
 uploader_holder = st.empty()
-uploaded_csv_files = uploader_holder.file_uploader("Son 70 iş gününde gerçekleşen inflow-outflow, USD ve Brent verilerini içeren **.csv** formatlı dosyaları yükleyiniz.",
+uploaded_csv_files = uploader_holder.file_uploader("Son 70 iş gününde gerçekleşen **cash_flow_train.csv**, **usd.csv** ve **brent.csv** dosyalarını yükleyiniz.",
                                                    accept_multiple_files=True)
 
 
@@ -108,7 +110,6 @@ if uploaded_csv_files is not None:
                 inference_df_output['Predicted Total Outflow'] = outflow_forecast
                 inference_df_output['Net Cashflow from Operations'] = target_forecast
                 # output_csv = inference_df_output.to_csv(index=False).encode('utf-8')
-
                 download_button_str = download_button(object_to_download=inference_df_output,
                                 download_filename='forecast.csv',
                                 button_text="Tahmini İndir")
@@ -141,4 +142,6 @@ if uploaded_csv_files is not None:
                                              name='Net Cashflow Tahmini',
                                              line=dict(color="red")))
                     st.plotly_chart(fig, use_container_width=True)
+                    
+                
 
